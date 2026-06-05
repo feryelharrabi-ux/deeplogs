@@ -1,1 +1,100 @@
+# ==============================================================================
+# SHA-256 AMÉLIORÉ POUR L'INTÉGRITÉ DES LOGS
+# Master Recherche - Cybersecurity & Log Management
+# ==============================================================================
 
+import hashlib
+import hmac
+import secrets
+import time
+import json
+
+
+class SecureSHA256:
+
+    def __init__(self, secret_key=None):
+
+        if secret_key is None:
+            secret_key = secrets.token_hex(32)
+
+        self.secret_key = secret_key.encode()
+
+    # --------------------------------------------------------------------------
+    # Génération d'un hash sécurisé
+    # --------------------------------------------------------------------------
+    def generate_hash(self, log_message):
+
+        timestamp = str(time.time())
+
+        salt = secrets.token_hex(16)
+
+        data = f"{log_message}|{timestamp}|{salt}"
+
+        sha256_hash = hashlib.sha256(data.encode()).hexdigest()
+
+        signature = hmac.new(
+            self.secret_key,
+            sha256_hash.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        return {
+            "log": log_message,
+            "timestamp": timestamp,
+            "salt": salt,
+            "hash": sha256_hash,
+            "signature": signature
+        }
+
+    # --------------------------------------------------------------------------
+    # Vérification d'intégrité
+    # --------------------------------------------------------------------------
+    def verify_hash(self, record):
+
+        data = f"{record['log']}|{record['timestamp']}|{record['salt']}"
+
+        recalculated_hash = hashlib.sha256(
+            data.encode()
+        ).hexdigest()
+
+        recalculated_signature = hmac.new(
+            self.secret_key,
+            recalculated_hash.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        if recalculated_hash != record["hash"]:
+            return False
+
+        if recalculated_signature != record["signature"]:
+            return False
+
+        return True
+
+
+# ==============================================================================
+# TEST
+# ==============================================================================
+
+security = SecureSHA256()
+
+log_entry = "User login successful from IP 192.168.1.10"
+
+secured_log = security.generate_hash(log_entry)
+
+print("\n===== LOG PROTÉGÉ =====")
+print(json.dumps(secured_log, indent=4))
+
+result = security.verify_hash(secured_log)
+
+print("\nIntegrity Check:", result)
+
+# ==============================================================================
+# Simulation d'une attaque
+# ==============================================================================
+
+secured_log["log"] = "User login failed from IP 192.168.1.10"
+
+result = security.verify_hash(secured_log)
+
+print("\nAfter Tampering:", result)
