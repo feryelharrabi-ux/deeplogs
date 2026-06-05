@@ -1,0 +1,148 @@
+# ============================================================
+# ADVANCED MERKLE TREE - LOG INTEGRITY SYSTEM
+# ============================================================
+
+import hashlib
+import math
+
+
+# ============================================================
+# 1. SHA-256 FUNCTION
+# ============================================================
+
+def sha256(data: str) -> str:
+    return hashlib.sha256(data.encode('utf-8')).hexdigest()
+
+
+# ============================================================
+# 2. MERKLE TREE CLASS
+# ============================================================
+
+class MerkleTree:
+
+    def __init__(self, data_blocks):
+
+        if len(data_blocks) == 0:
+            raise ValueError("Empty data not allowed")
+
+        self.data_blocks = data_blocks
+        self.levels = []
+
+        self.build_tree()
+
+    # --------------------------------------------------------
+    # BUILD TREE
+    # --------------------------------------------------------
+    def build_tree(self):
+
+        # Leaf hashes
+        current_level = [sha256(str(d)) for d in self.data_blocks]
+        self.levels.append(current_level)
+
+        # Build upper levels
+        while len(current_level) > 1:
+
+            if len(current_level) % 2 != 0:
+                current_level.append(current_level[-1])  # duplicate last
+
+            next_level = []
+
+            for i in range(0, len(current_level), 2):
+
+                combined = current_level[i] + current_level[i + 1]
+                next_level.append(sha256(combined))
+
+            self.levels.append(next_level)
+            current_level = next_level
+
+    # --------------------------------------------------------
+    # ROOT
+    # --------------------------------------------------------
+    def get_root(self):
+        return self.levels[-1][0]
+
+    # --------------------------------------------------------
+    # DISPLAY TREE
+    # --------------------------------------------------------
+    def print_tree(self):
+
+        print("\n MERKLE TREE STRUCTURE\n")
+ 
+        for i, level in enumerate(self.levels):
+
+            print(f"Level {i} ({len(level)} nodes):")
+            print(level)
+            print("-" * 50)
+
+    # --------------------------------------------------------
+    # MERKLE PROOF FOR ONE LEAF
+    # --------------------------------------------------------
+    def get_proof(self, index):
+
+        proof = []
+
+        for level in self.levels[:-1]:
+
+            # sibling index
+            if index % 2 == 0:
+                sibling_index = index + 1
+            else:
+                sibling_index = index - 1
+
+            if sibling_index < len(level):
+                proof.append(level[sibling_index])
+            else:
+                proof.append(level[index])  # duplicate if missing
+
+            index = index // 2
+
+        return proof
+
+    # --------------------------------------------------------
+    # VERIFY PROOF
+    # --------------------------------------------------------
+    def verify_proof(self, leaf, proof, root):
+
+        current = sha256(str(leaf))
+
+        for sibling in proof:
+            current = sha256(current + sibling)
+
+        return current == root
+
+
+# ============================================================
+# 3. EXAMPLE USAGE
+# ============================================================
+
+if __name__ == "__main__":
+
+    logs = [
+        "User login successful",
+        "File accessed /etc/passwd",
+        "Kernel boot completed",
+        "Error disk read failure",
+        "Network connection established"
+    ]
+
+    tree = MerkleTree(logs)
+
+    # Root
+    root = tree.get_root()
+    print(" MERKLE ROOT:")
+    print(root)
+
+    # Show tree
+    tree.print_tree()
+
+    # Proof for log index 2
+    index = 2
+    proof = tree.get_proof(index)
+
+    print("\n MERKLE PROOF:")
+    print(proof)
+
+    # Verification
+    result = tree.verify_proof(logs[index], proof, root)
+
+    print("\n VERIFICATION RESULT:", result)
